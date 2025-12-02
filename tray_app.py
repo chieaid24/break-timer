@@ -9,7 +9,7 @@ from windows_toasts import Toast, ToastDisplayImage, WindowsToaster
 import pystray
 
 
-DEFAULT_MINUTES = 25
+DEFAULT_MINUTES = 20
 DEFAULT_MESSAGE = "Stretch, Rest Eyes, Water, and Walk!"
 
 
