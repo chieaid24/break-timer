@@ -10,7 +10,7 @@ import pystray
 
 
 DEFAULT_MINUTES = 20
-DEFAULT_MESSAGE = "Stretch, Rest Eyes, Water, and Walk!"
+DEFAULT_MESSAGE = "Water, breathe, flat, posture"
 
 
 # ---------------------- ICON FACTORY ----------------------
@@ -32,7 +32,7 @@ def create_status_icon(is_running: bool) -> Image.Image:
 # ---------------------- ORIGINAL TOAST SYSTEM ----------------------
 def build_notification() -> None:
     """Create and display a Windows toast using windows_toasts."""
-    toaster = WindowsToaster("Productivity Reminder")
+    toaster = WindowsToaster("Chill Reminder")
     newToast = Toast()
     newToast.text_fields = [DEFAULT_MESSAGE]
     newToast.on_activated = lambda _: print("Toast clicked!")
