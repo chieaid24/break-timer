@@ -7,7 +7,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class ReminderTimer:
             except Exception:
                 logger.exception("Reminder notification failed")
             else:
-                triggered_at = _local_now()
+                triggered_at = _utc_now()
 
             with self._condition:
                 if triggered_at is not None:
@@ -133,7 +133,7 @@ class ReminderTimer:
 
     def _schedule_locked(self) -> None:
         self._deadline = time.monotonic() + self._interval_seconds
-        self._next_trigger = _local_now() + self._interval
+        self._next_trigger = _utc_now() + self._interval
 
     def _snapshot_locked(self) -> TimerSnapshot:
         return TimerSnapshot(
@@ -151,5 +151,5 @@ class ReminderTimer:
             logger.exception("Reminder state update failed")
 
 
-def _local_now() -> datetime:
-    return datetime.now().astimezone()
+def _utc_now() -> datetime:
+    return datetime.now(UTC)

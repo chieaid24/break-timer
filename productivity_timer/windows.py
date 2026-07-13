@@ -9,7 +9,7 @@ import ntpath
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
@@ -74,8 +74,15 @@ class StartupRegistration:
             winreg.HKEY_CURRENT_USER,
             RUN_KEY,
             0,
-            winreg.KEY_SET_VALUE,
+            winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE,
         ) as key:
+            try:
+                current_command, value_type = winreg.QueryValueEx(key, self.value_name)
+            except FileNotFoundError:
+                pass
+            else:
+                if current_command == self.command and value_type == winreg.REG_SZ:
+                    return
             winreg.SetValueEx(
                 key,
                 self.value_name,
@@ -149,6 +156,10 @@ class ToastNotifier:
 
     def notify(self) -> None:
         from windows_toasts import Toast
+
+        setting = self._toaster.toastNotifier.setting
+        if setting != type(setting).ENABLED:
+            raise RuntimeError(f"Windows notifications are unavailable: {setting}")
 
         toast = Toast()
         toast.text_fields = [DEFAULT_MESSAGE]
@@ -231,9 +242,20 @@ def create_status_icon(is_running: bool) -> Any:
 
 
 def format_tooltip(snapshot: TimerSnapshot, now: datetime | None = None) -> str:
-    reference = now or datetime.now().astimezone()
-    last = _format_moment(snapshot.last_triggered, reference, "never")
-    next_trigger = _format_moment(snapshot.next_trigger, reference, "paused")
+    reference = now or datetime.now(UTC)
+    display_timezone = reference.tzinfo if now is not None else None
+    last = _format_moment(
+        snapshot.last_triggered,
+        reference,
+        "never",
+        display_timezone,
+    )
+    next_trigger = _format_moment(
+        snapshot.next_trigger,
+        reference,
+        "paused",
+        display_timezone,
+    )
     return f"{APP_NAME}\nLast: {last}\nNext: {next_trigger}"
 
 
@@ -307,10 +329,12 @@ def _format_moment(
     moment: datetime | None,
     reference: datetime,
     missing: str,
+    display_timezone: tzinfo | None,
 ) -> str:
     if moment is None:
         return missing
-    local = moment.astimezone(reference.tzinfo)
-    if local.date() == reference.date():
+    local = moment.astimezone(display_timezone)
+    local_reference = reference.astimezone(display_timezone)
+    if local.date() == local_reference.date():
         return f"today at {local:%H:%M:%S}"
     return f"{local:%Y-%m-%d %H:%M:%S}"

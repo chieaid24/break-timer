@@ -1,22 +1,51 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
 import uuid
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
+from types import ModuleType
+from unittest import mock
 
 from productivity_timer.timer import TimerSnapshot
 from productivity_timer.windows import (
     RUN_KEY,
     SingleInstance,
     StartupRegistration,
+    ToastNotifier,
     TriggerStateStore,
     format_tooltip,
     run_windows_app,
     startup_command,
 )
+
+
+class NotificationSetting(Enum):
+    ENABLED = 0
+    DISABLED_FOR_USER = 1
+
+
+class FakeToast:
+    def __init__(self) -> None:
+        self.text_fields: list[str] = []
+
+
+class FakeNativeNotifier:
+    def __init__(self, setting: NotificationSetting) -> None:
+        self.setting = setting
+
+
+class FakeToaster:
+    def __init__(self, setting: NotificationSetting) -> None:
+        self.toastNotifier = FakeNativeNotifier(setting)
+        self.shown: list[FakeToast] = []
+
+    def show_toast(self, toast: FakeToast) -> None:
+        self.shown.append(toast)
 
 
 class TriggerStateStoreTests(unittest.TestCase):
@@ -91,10 +120,39 @@ class WindowsFormattingTests(unittest.TestCase):
             'C:\\Python312\\pythonw.exe "C:\\Productivity Timer\\tray_app.py"',
         )
 
+    def test_toast_rejects_disabled_windows_notifications(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.DISABLED_FOR_USER)
+        with mock.patch.dict(sys.modules, {"windows_toasts": fake_module}):
+            notifier = ToastNotifier()
+
+            with self.assertRaisesRegex(RuntimeError, "notifications are unavailable"):
+                notifier.notify()
+
+        self.assertEqual(toaster.shown, [])
+
+    def test_toast_submits_when_windows_notifications_are_enabled(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
+        with mock.patch.dict(sys.modules, {"windows_toasts": fake_module}):
+            ToastNotifier().notify()
+
+        self.assertEqual(
+            toaster.shown[0].text_fields, ["Water, breathe, flat, posture"]
+        )
+
     @unittest.skipIf(os.name == "nt", "non-Windows contract")
     def test_runtime_rejects_non_windows(self) -> None:
         with self.assertRaisesRegex(OSError, "Windows only"):
             run_windows_app()
+
+    @staticmethod
+    def _fake_toasts(
+        setting: NotificationSetting,
+    ) -> tuple[ModuleType, FakeToaster]:
+        toaster = FakeToaster(setting)
+        module = ModuleType("windows_toasts")
+        module.Toast = FakeToast
+        module.WindowsToaster = lambda application_name: toaster
+        return module, toaster
 
 
 @unittest.skipUnless(os.name == "nt", "Windows integration test")
@@ -106,12 +164,17 @@ class WindowsIntegrationTests(unittest.TestCase):
         command = r'"C:\Test Path\ProductivityTimer.exe"'
         self.addCleanup(self._delete_registry_value, value_name)
 
-        StartupRegistration(command, value_name).ensure()
+        registration = StartupRegistration(command, value_name)
+        registration.ensure()
 
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
             stored, value_type = winreg.QueryValueEx(key, value_name)
         self.assertEqual(stored, command)
         self.assertEqual(value_type, winreg.REG_SZ)
+
+        with mock.patch.object(winreg, "SetValueEx", wraps=winreg.SetValueEx) as write:
+            registration.ensure()
+        write.assert_not_called()
 
     def test_single_instance_uses_real_named_mutex(self) -> None:
         name = f"Local\\ProductivityTimerTest-{uuid.uuid4()}"
