@@ -35,4 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='.build-assets/ProductivityTimer.ico',
+    version='.build-assets/version_info.txt',
 )

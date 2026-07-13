@@ -13,17 +13,18 @@
 - `productivity_timer/windows.py` owns registry, persistence, notification, mutex, and tray adapters.
 - `tray_app.py` remains a compatibility entry point for PyInstaller.
 - Persist user state under `%LOCALAPPDATA%/ProductivityTimer`.
+- `scripts/build.ps1` is the canonical test and packaging entry point.
+- `scripts/test-installer.ps1` exercises install, startup registration, and uninstall cleanup in CI only.
+- `installer/ProductivityTimer.iss` owns per-user installation, startup registration, upgrades, and uninstall cleanup.
+- Version tags publish the installer, portable executable, and checksums through `.github/workflows/release.yml`.
 
 ## Verification
 
 Use Python 3.12 on Windows.
 
 ```powershell
-python -m pip install -r requirements-dev.txt
-ruff format --check .
-ruff check .
-python -m unittest discover -v
-pyinstaller --clean --noconfirm tray_app.spec
+.\scripts\install-inno.ps1
+.\scripts\build.ps1
 ```
 
-Do not commit `build/` or `dist/`; GitHub Actions verifies the Windows executable.
+Do not commit `.build-assets/`, `build/`, or `dist/`; GitHub Actions verifies the Windows executable and installer.
