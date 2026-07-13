@@ -6,7 +6,15 @@ This app does not support macOS or Linux, and it has no interval or message sett
 
 ## Run
 
-Download `ProductivityTimer-windows` from the latest successful [Windows workflow](../../actions/workflows/windows.yml), extract it to a permanent location, and run `ProductivityTimer.exe`. The first launch starts the timer and registers that executable for future sign-ins.
+Clone this repository into a permanent location, then run the app from PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python tray_app.py
+```
+
+The first launch starts the timer and registers the source entry point for future sign-ins.
 
 Hover over the tray icon to see the last successful reminder and the next scheduled reminder. Click the icon to pause or resume reminders. Pausing lasts until you resume or restart the app; quitting lasts until your next Windows sign-in.
 
@@ -25,4 +33,4 @@ py -3.12 -m venv .venv
 .venv\Scripts\pyinstaller --clean --noconfirm tray_app.spec
 ```
 
-The executable is written to `dist\ProductivityTimer.exe`.
+The executable is written to `dist\ProductivityTimer.exe`. Move it to a permanent location and run it once to replace the source startup entry with the executable.

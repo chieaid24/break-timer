@@ -26,4 +26,4 @@ python -m unittest discover -v
 pyinstaller --clean --noconfirm tray_app.spec
 ```
 
-Do not commit `build/` or `dist/`; GitHub Actions publishes the executable artifact.
+Do not commit `build/` or `dist/`; GitHub Actions verifies the Windows executable.

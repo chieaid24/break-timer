@@ -36,9 +36,3 @@ jobs:
           $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
           $subsystem = [BitConverter]::ToInt16($bytes, $peOffset + 92)
           if ($subsystem -ne 2) { throw "Executable is not a Windows GUI app" }
-      - uses: actions/upload-artifact@v6
-        with:
-          name: ProductivityTimer-windows
-          path: dist/ProductivityTimer.exe
-          if-no-files-found: error
-          retention-days: 14
