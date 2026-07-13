@@ -1,0 +1,38 @@
+name: windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - run: ruff format --check .
+      - run: ruff check .
+      - run: python -m unittest discover -v
+      - run: pyinstaller --clean --noconfirm tray_app.spec
+      - name: Verify Windows GUI executable
+        shell: pwsh
+        run: |
+          $path = "dist/ProductivityTimer.exe"
+          if (-not (Test-Path $path)) { throw "Executable was not created" }
+          $bytes = [System.IO.File]::ReadAllBytes($path)
+          if ([System.Text.Encoding]::ASCII.GetString($bytes, 0, 2) -ne "MZ") {
+            throw "Executable has no Windows PE header"
+          }
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $subsystem = [BitConverter]::ToInt16($bytes, $peOffset + 92)
+          if ($subsystem -ne 2) { throw "Executable is not a Windows GUI app" }
