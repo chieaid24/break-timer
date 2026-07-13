@@ -272,7 +272,8 @@ def run_windows_app() -> int:
 
     state_dir = _state_dir()
     _configure_logging(state_dir / "productivity_timer.log")
-    StartupRegistration(startup_command()).ensure()
+    source_entrypoint = Path(__file__).resolve().parent.parent / "tray_app.py"
+    StartupRegistration(startup_command(entrypoint=source_entrypoint)).ensure()
 
     with SingleInstance() as instance:
         if not instance.acquire():
