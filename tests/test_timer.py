@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from productivity_timer.timer import ReminderTimer
 
@@ -78,7 +78,7 @@ class ReminderTimerTests(unittest.TestCase):
         self.assertIn("Reminder notification failed", logs.output[0])
 
     def test_preserves_persisted_last_trigger(self) -> None:
-        previous = datetime(2026, 7, 12, 8, 30, tzinfo=timezone.utc)
+        previous = datetime(2026, 7, 12, 8, 30, tzinfo=UTC)
         timer = ReminderTimer(timedelta(hours=1), lambda: None, last_triggered=previous)
         self.addCleanup(timer.shutdown)
 

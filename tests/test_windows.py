@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from productivity_timer.timer import TimerSnapshot
@@ -23,7 +23,7 @@ class TriggerStateStoreTests(unittest.TestCase):
     def test_round_trips_timezone_aware_trigger(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = TriggerStateStore(Path(directory) / "nested" / "state.json")
-            triggered_at = datetime(2026, 7, 13, 14, 5, 6, tzinfo=timezone.utc)
+            triggered_at = datetime(2026, 7, 13, 14, 5, 6, tzinfo=UTC)
 
             store.save(triggered_at)
 
@@ -40,11 +40,11 @@ class TriggerStateStoreTests(unittest.TestCase):
 
 class WindowsFormattingTests(unittest.TestCase):
     def test_tooltip_contains_real_last_and_next_times(self) -> None:
-        now = datetime(2026, 7, 13, 14, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 7, 13, 14, 0, 0, tzinfo=UTC)
         snapshot = TimerSnapshot(
             running=True,
-            last_triggered=datetime(2026, 7, 13, 13, 40, 1, tzinfo=timezone.utc),
-            next_trigger=datetime(2026, 7, 13, 14, 20, 2, tzinfo=timezone.utc),
+            last_triggered=datetime(2026, 7, 13, 13, 40, 1, tzinfo=UTC),
+            next_trigger=datetime(2026, 7, 13, 14, 20, 2, tzinfo=UTC),
         )
 
         tooltip = format_tooltip(snapshot, now)
@@ -60,7 +60,7 @@ class WindowsFormattingTests(unittest.TestCase):
 
         tooltip = format_tooltip(
             snapshot,
-            datetime(2026, 7, 13, tzinfo=timezone.utc),
+            datetime(2026, 7, 13, tzinfo=UTC),
         )
 
         self.assertIn("Last: never", tooltip)

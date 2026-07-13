@@ -201,14 +201,16 @@ class WindowsTrayApp:
         self._icon.stop()
 
     def _on_change(self, snapshot: TimerSnapshot) -> None:
-        if snapshot.last_triggered != self._persisted_last:
-            if snapshot.last_triggered is not None:
-                try:
-                    self._state_store.save(snapshot.last_triggered)
-                except OSError:
-                    logger.exception("Could not persist the last reminder trigger")
-                else:
-                    self._persisted_last = snapshot.last_triggered
+        if (
+            snapshot.last_triggered != self._persisted_last
+            and snapshot.last_triggered is not None
+        ):
+            try:
+                self._state_store.save(snapshot.last_triggered)
+            except OSError:
+                logger.exception("Could not persist the last reminder trigger")
+            else:
+                self._persisted_last = snapshot.last_triggered
 
         self._icon.title = format_tooltip(snapshot)
         self._icon.icon = create_status_icon(snapshot.running)
