@@ -229,15 +229,40 @@ class WindowsTrayApp:
             self._icon.update_menu()
 
 
-def create_status_icon(is_running: bool) -> Any:
-    from PIL import Image, ImageDraw
+def create_status_icon(is_running: bool, size: int = 64) -> Any:
+    from PIL import Image, ImageDraw, ImageFont
 
-    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    draw.ellipse((4, 4, 60, 60), fill=(30, 30, 30, 255))
+    margin = max(1, size // 16)
+    draw.ellipse(
+        (margin, margin, size - margin, size - margin),
+        fill=(30, 30, 30, 255),
+    )
     color = (46, 204, 113, 255) if is_running else (231, 76, 60, 255)
-    draw.ellipse((40, 40, 60, 60), fill=color)
-    draw.text((14, 18), "PT", fill=(240, 240, 240, 255))
+    dot_size = max(4, round(size * 0.31))
+    draw.ellipse(
+        (
+            size - dot_size - margin,
+            size - dot_size - margin,
+            size - margin,
+            size - margin,
+        ),
+        fill=color,
+    )
+    try:
+        font = ImageFont.truetype("arialbd.ttf", max(8, round(size * 0.3)))
+    except OSError:
+        font = ImageFont.load_default()
+    text_box = draw.textbbox((0, 0), "PT", font=font)
+    text_width = text_box[2] - text_box[0]
+    text_height = text_box[3] - text_box[1]
+    draw.text(
+        ((size - text_width) / 2, (size - text_height) / 2 - text_box[1]),
+        "PT",
+        fill=(240, 240, 240, 255),
+        font=font,
+    )
     return image
 
 

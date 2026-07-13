@@ -1,0 +1,66 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Install verified Inno Setup
+        shell: pwsh
+        run: ./scripts/install-inno.ps1
+      - name: Test and build Windows packages
+        shell: pwsh
+        run: ./scripts/build.ps1 -SkipDependencies
+      - name: Smoke-test install and uninstall
+        shell: pwsh
+        run: ./scripts/test-installer.ps1
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME.TrimStart("v")
+          $appVersion = (python -c "from productivity_timer import __version__; print(__version__)").Trim()
+          if ($tagVersion -ne $appVersion) {
+            throw "Tag version $tagVersion does not match app version $appVersion"
+          }
+      - name: Create checksums
+        shell: pwsh
+        run: |
+          $files = @(
+            "dist/installer/ProductivityTimer-Setup.exe",
+            "dist/ProductivityTimer.exe"
+          )
+          $lines = foreach ($file in $files) {
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $([IO.Path]::GetFileName($file))"
+          }
+          $lines | Set-Content -Path "dist/SHA256SUMS.txt" -Encoding ascii
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notesFile = "docs/release-notes/$env:GITHUB_REF_NAME.md"
+          if (-not (Test-Path $notesFile)) {
+            throw "Release notes were not found at $notesFile"
+          }
+          gh release create $env:GITHUB_REF_NAME `
+            "dist/installer/ProductivityTimer-Setup.exe#Windows installer" `
+            "dist/ProductivityTimer.exe#Portable Windows executable" `
+            "dist/SHA256SUMS.txt#SHA-256 checksums" `
+            --verify-tag `
+            --title "Productivity Timer $env:GITHUB_REF_NAME" `
+            --notes-file $notesFile
