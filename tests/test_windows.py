@@ -14,6 +14,7 @@ from unittest import mock
 from productivity_timer.timer import TimerSnapshot
 from productivity_timer.windows import (
     RUN_KEY,
+    AppUserModelRegistration,
     SingleInstance,
     StartupRegistration,
     ToastNotifier,
@@ -120,15 +121,29 @@ class WindowsFormattingTests(unittest.TestCase):
             'C:\\Python312\\pythonw.exe "C:\\Productivity Timer\\tray_app.py"',
         )
 
-    def test_toast_rejects_disabled_windows_notifications(self) -> None:
+    def test_toast_still_shows_when_setting_reports_disabled(self) -> None:
         fake_module, toaster = self._fake_toasts(NotificationSetting.DISABLED_FOR_USER)
+        with (
+            mock.patch.dict(sys.modules, {"windows_toasts": fake_module}),
+            self.assertLogs("productivity_timer.windows", level="WARNING"),
+        ):
+            ToastNotifier().notify()
+
+        self.assertEqual(len(toaster.shown), 1)
+
+    def test_toast_still_shows_when_setting_query_raises(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
+
+        class RaisingNotifier:
+            @property
+            def setting(self) -> NotificationSetting:
+                raise OSError("Element not found")
+
+        toaster.toastNotifier = RaisingNotifier()
         with mock.patch.dict(sys.modules, {"windows_toasts": fake_module}):
-            notifier = ToastNotifier()
+            ToastNotifier().notify()
 
-            with self.assertRaisesRegex(RuntimeError, "notifications are unavailable"):
-                notifier.notify()
-
-        self.assertEqual(toaster.shown, [])
+        self.assertEqual(len(toaster.shown), 1)
 
     def test_toast_submits_when_windows_notifications_are_enabled(self) -> None:
         fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
@@ -186,6 +201,22 @@ class WindowsIntegrationTests(unittest.TestCase):
         self.assertTrue(first.acquire())
         self.assertFalse(second.acquire())
 
+    def test_app_user_model_registration_writes_display_name(self) -> None:
+        import winreg
+
+        app_id = f"ProductivityTimerTest.{uuid.uuid4().hex}"
+        self.addCleanup(self._delete_aumid_key, app_id)
+
+        AppUserModelRegistration(app_id, "Productivity Timer Test").ensure()
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            rf"Software\Classes\AppUserModelId\{app_id}",
+        ) as key:
+            stored, value_type = winreg.QueryValueEx(key, "DisplayName")
+        self.assertEqual(stored, "Productivity Timer Test")
+        self.assertEqual(value_type, winreg.REG_SZ)
+
     @staticmethod
     def _delete_registry_value(value_name: str) -> None:
         import winreg
@@ -197,6 +228,15 @@ class WindowsIntegrationTests(unittest.TestCase):
             winreg.KEY_SET_VALUE,
         ) as key:
             winreg.DeleteValue(key, value_name)
+
+    @staticmethod
+    def _delete_aumid_key(app_id: str) -> None:
+        import winreg
+
+        winreg.DeleteKey(
+            winreg.HKEY_CURRENT_USER,
+            rf"Software\Classes\AppUserModelId\{app_id}",
+        )
 
 
 if __name__ == "__main__":

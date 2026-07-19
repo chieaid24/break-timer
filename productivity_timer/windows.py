@@ -15,7 +15,12 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
-from productivity_timer import APP_NAME, DEFAULT_INTERVAL_MINUTES, DEFAULT_MESSAGE
+from productivity_timer import (
+    APP_NAME,
+    APP_USER_MODEL_ID,
+    DEFAULT_INTERVAL_MINUTES,
+    DEFAULT_MESSAGE,
+)
 from productivity_timer.timer import ReminderTimer, TimerSnapshot
 
 logger = logging.getLogger(__name__)
@@ -92,6 +97,31 @@ class StartupRegistration:
             )
 
 
+class AppUserModelRegistration:
+    """Register the AUMID so Windows attributes and delivers our toasts."""
+
+    def __init__(
+        self, app_id: str, display_name: str, icon_path: Path | None = None
+    ) -> None:
+        self.app_id = app_id
+        self.display_name = display_name
+        self.icon_path = icon_path
+
+    def ensure(self) -> None:
+        if os.name != "nt":
+            raise OSError("AUMID registration requires Windows")
+
+        import winreg
+
+        key_path = rf"Software\Classes\AppUserModelId\{self.app_id}"
+        with winreg.CreateKeyEx(
+            winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE
+        ) as key:
+            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, self.display_name)
+            if self.icon_path is not None:
+                winreg.SetValueEx(key, "IconUri", 0, winreg.REG_SZ, str(self.icon_path))
+
+
 class SingleInstance:
     """Hold a process-wide Windows mutex while the application is running."""
 
@@ -149,21 +179,31 @@ class SingleInstance:
 class ToastNotifier:
     """Deliver the configured reminder with the Windows toast API."""
 
-    def __init__(self) -> None:
+    def __init__(self, app_id: str = APP_USER_MODEL_ID) -> None:
         from windows_toasts import WindowsToaster
 
-        self._toaster = WindowsToaster(APP_NAME)
+        # WindowsToaster treats this string as the AUMID; it must be the one
+        # registered by AppUserModelRegistration or Windows drops the toast.
+        self._toaster = WindowsToaster(app_id)
 
     def notify(self) -> None:
         from windows_toasts import Toast
 
-        setting = self._toaster.toastNotifier.setting
-        if setting != type(setting).ENABLED:
-            raise RuntimeError(f"Windows notifications are unavailable: {setting}")
-
+        self._warn_if_disabled()
         toast = Toast()
         toast.text_fields = [DEFAULT_MESSAGE]
         self._toaster.show_toast(toast)
+
+    def _warn_if_disabled(self) -> None:
+        # Diagnostic only. Never block delivery: for unpackaged apps `.setting`
+        # raises or reports DisabledForApplication until the first toast is
+        # shown, so gating on it would prevent any toast from ever firing.
+        try:
+            setting = self._toaster.toastNotifier.setting
+        except Exception:
+            return
+        if setting != type(setting).ENABLED:
+            logger.warning("Windows notifications may be suppressed: %s", setting)
 
 
 class WindowsTrayApp:
@@ -319,6 +359,9 @@ def run_windows_app() -> int:
 
     state_dir = _state_dir()
     _configure_logging(state_dir / "productivity_timer.log")
+    _set_process_app_id(APP_USER_MODEL_ID)
+    icon_path = _ensure_app_icon(state_dir / "app.ico")
+    AppUserModelRegistration(APP_USER_MODEL_ID, APP_NAME, icon_path).ensure()
     source_entrypoint = Path(__file__).resolve().parent.parent / "tray_app.py"
     StartupRegistration(startup_command(entrypoint=source_entrypoint)).ensure()
 
@@ -335,6 +378,27 @@ def _state_dir() -> Path:
     if not local_app_data:
         raise RuntimeError("LOCALAPPDATA is not set")
     return Path(local_app_data) / "ProductivityTimer"
+
+
+def _set_process_app_id(app_id: str) -> None:
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except (AttributeError, OSError):
+        logger.warning("Could not set the process AppUserModelID")
+
+
+def _ensure_app_icon(path: Path) -> Path | None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        create_status_icon(True, 256).save(
+            path,
+            format="ICO",
+            sizes=[(16, 16), (32, 32), (48, 48), (256, 256)],
+        )
+    except Exception:
+        logger.exception("Could not write the notification icon")
+        return None
+    return path
 
 
 def _configure_logging(path: Path) -> None:
