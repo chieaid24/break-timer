@@ -270,39 +270,103 @@ class WindowsTrayApp:
 
 
 def create_status_icon(is_running: bool, size: int = 64) -> Any:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    if size < 1:
+        raise ValueError("size must be positive")
+
+    source_size = max(256, size * 4)
+    scale = source_size / 256
+
+    def point(x: int, y: int) -> tuple[int, int]:
+        return round(x * scale), round(y * scale)
+
+    def box(left: int, top: int, right: int, bottom: int) -> tuple[int, ...]:
+        return (*point(left, top), *point(right, bottom))
+
+    def width(value: int) -> int:
+        return max(1, round(value * scale))
+
+    charcoal = (47, 50, 57, 255)
+    cream = (248, 246, 239, 255)
+    sage = (133, 143, 103, 255)
+    ember = (190, 100, 55, 255)
+    status = (46, 204, 113, 255) if is_running else (231, 76, 60, 255)
+
+    image = Image.new("RGBA", (source_size, source_size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    margin = max(1, size // 16)
-    draw.ellipse(
-        (margin, margin, size - margin, size - margin),
-        fill=(30, 30, 30, 255),
+
+    draw.polygon(
+        [point(22, 72), point(25, 6), point(93, 43)],
+        fill=charcoal,
     )
-    color = (46, 204, 113, 255) if is_running else (231, 76, 60, 255)
-    dot_size = max(4, round(size * 0.31))
-    draw.ellipse(
-        (
-            size - dot_size - margin,
-            size - dot_size - margin,
-            size - margin,
-            size - margin,
-        ),
-        fill=color,
+    draw.polygon(
+        [point(163, 43), point(231, 6), point(234, 72)],
+        fill=charcoal,
     )
-    try:
-        font = ImageFont.truetype("arialbd.ttf", max(8, round(size * 0.3)))
-    except OSError:
-        font = ImageFont.load_default()
-    text_box = draw.textbbox((0, 0), "PT", font=font)
-    text_width = text_box[2] - text_box[0]
-    text_height = text_box[3] - text_box[1]
-    draw.text(
-        ((size - text_width) / 2, (size - text_height) / 2 - text_box[1]),
-        "PT",
-        fill=(240, 240, 240, 255),
-        font=font,
+    draw.ellipse(box(14, 24, 242, 250), fill=charcoal)
+
+    draw.ellipse(box(34, 62, 131, 183), fill=cream)
+    draw.ellipse(box(125, 62, 222, 183), fill=cream)
+    draw.ellipse(box(46, 128, 210, 230), fill=cream)
+
+    draw.ellipse(box(70, 106, 112, 151), fill=charcoal)
+    draw.ellipse(box(146, 109, 188, 154), fill=charcoal)
+    draw.rounded_rectangle(
+        box(51, 106, 121, 123),
+        radius=width(8),
+        fill=charcoal,
     )
+    draw.rounded_rectangle(
+        box(137, 109, 207, 126),
+        radius=width(8),
+        fill=charcoal,
+    )
+
+    cigarette_start = point(30, 195)
+    cigarette_end = point(115, 154)
+    draw.line(
+        (cigarette_start, cigarette_end),
+        fill=charcoal,
+        width=width(24),
+    )
+    draw.line(
+        (cigarette_start, cigarette_end),
+        fill=cream,
+        width=width(12),
+    )
+    draw.ellipse(box(22, 184, 39, 205), fill=charcoal)
+    draw.ellipse(box(26, 188, 35, 201), fill=ember)
+    draw.line(
+        [
+            point(27, 181),
+            point(37, 170),
+            point(29, 158),
+            point(33, 146),
+            point(45, 134),
+            point(41, 121),
+        ],
+        fill=sage,
+        width=width(9),
+        joint="curve",
+    )
+
+    draw.polygon(
+        [
+            point(105, 154),
+            point(115, 141),
+            point(135, 137),
+            point(153, 155),
+            point(129, 188),
+        ],
+        fill=sage,
+    )
+
+    draw.ellipse(box(183, 183, 243, 243), fill=charcoal)
+    draw.ellipse(box(191, 191, 235, 235), fill=status)
+
+    if source_size != size:
+        image = image.resize((size, size), Image.Resampling.LANCZOS)
     return image
 
 
