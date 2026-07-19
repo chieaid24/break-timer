@@ -1,6 +1,6 @@
 # Productivity Timer
 
-Productivity Timer is a fixed 20-minute reminder for Windows 10 and Windows 11. It runs in the system tray, sends `Water, breathe, flat, posture`, and starts automatically at sign-in.
+Productivity Timer is a fixed 20-minute reminder for Windows 10 and Windows 11. It runs in the system tray and starts automatically at sign-in.
 
 This app does not support macOS or Linux, and it has no interval or message settings.
 
