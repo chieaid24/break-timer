@@ -10,7 +10,9 @@
 ## Architecture
 
 - `productivity_timer/timer.py` owns scheduling, thread lifecycle, and coherent timer snapshots.
-- `productivity_timer/windows.py` owns registry, persistence, notification, mutex, and tray adapters.
+- `productivity_timer/settings.py` owns settings validation and persistence.
+- `productivity_timer/settings_dialog.py` owns the native settings window.
+- `productivity_timer/windows.py` owns registry, trigger persistence, notification, mutex, and tray adapters.
 - Register the notification AUMID (`APP_USER_MODEL_ID`) at launch and pass the same string to the toaster; Windows silently drops toasts from an unregistered AUMID.
 - `tray_app.py` remains a compatibility entry point for PyInstaller.
 - Persist user state under `%LOCALAPPDATA%/ProductivityTimer`.

@@ -9,6 +9,7 @@ import ntpath
 import os
 import subprocess
 import sys
+import threading
 from datetime import UTC, datetime, timedelta, tzinfo
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -18,9 +19,13 @@ from typing import Any, Self
 from productivity_timer import (
     APP_NAME,
     APP_USER_MODEL_ID,
-    DEFAULT_INTERVAL_MINUTES,
-    DEFAULT_MESSAGE,
 )
+from productivity_timer.settings import (
+    NotificationSound,
+    ReminderSettings,
+    SettingsStore,
+)
+from productivity_timer.settings_dialog import SettingsDialog
 from productivity_timer.timer import ReminderTimer, TimerSnapshot
 
 logger = logging.getLogger(__name__)
@@ -179,19 +184,31 @@ class SingleInstance:
 class ToastNotifier:
     """Deliver the configured reminder with the Windows toast API."""
 
-    def __init__(self, app_id: str = APP_USER_MODEL_ID) -> None:
+    def __init__(
+        self,
+        settings: ReminderSettings | None = None,
+        app_id: str = APP_USER_MODEL_ID,
+    ) -> None:
         from windows_toasts import WindowsToaster
 
-        # WindowsToaster treats this string as the AUMID; it must be the one
-        # registered by AppUserModelRegistration or Windows drops the toast.
+        # The toaster AUMID must match the registered app ID.
         self._toaster = WindowsToaster(app_id)
+        self._lock = threading.Lock()
+        self._settings = settings or ReminderSettings()
+
+    def configure(self, settings: ReminderSettings) -> None:
+        with self._lock:
+            self._settings = settings
 
     def notify(self) -> None:
         from windows_toasts import Toast
 
+        with self._lock:
+            settings = self._settings
         self._warn_if_disabled()
         toast = Toast()
-        toast.text_fields = [DEFAULT_MESSAGE]
+        toast.text_fields = [settings.message]
+        toast.audio = _toast_audio(settings)
         self._toaster.show_toast(toast)
 
     def _warn_if_disabled(self) -> None:
@@ -209,15 +226,23 @@ class ToastNotifier:
 class WindowsTrayApp:
     """Coordinate the tray UI through the ReminderTimer interface."""
 
-    def __init__(self, state_store: TriggerStateStore) -> None:
+    def __init__(
+        self,
+        state_store: TriggerStateStore,
+        settings_store: SettingsStore,
+        icon_path: Path | None = None,
+    ) -> None:
         import pystray
 
         self._state_store = state_store
+        self._settings_store = settings_store
         self._persisted_last = state_store.load()
-        self._notifier = ToastNotifier()
+        self._settings = settings_store.load()
+        self._settings_dialog = SettingsDialog(icon_path)
+        self._notifier = ToastNotifier(self._settings)
         self._icon = pystray.Icon("productivity_timer")
         self._timer = ReminderTimer(
-            timedelta(minutes=DEFAULT_INTERVAL_MINUTES),
+            timedelta(minutes=self._settings.interval_minutes),
             self._notifier.notify,
             last_triggered=self._persisted_last,
             on_change=self._on_change,
@@ -226,6 +251,8 @@ class WindowsTrayApp:
         self._icon.title = format_tooltip(self._timer.snapshot)
         self._icon.menu = pystray.Menu(
             pystray.MenuItem(self._toggle_label, self._toggle, default=True),
+            pystray.MenuItem("Settings...", self._open_settings),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit until next sign-in", self._quit),
         )
 
@@ -246,6 +273,17 @@ class WindowsTrayApp:
             self._timer.pause()
         else:
             self._timer.start()
+
+    def _open_settings(self, icon: object = None, item: object = None) -> None:
+        self._settings_dialog.open(self._settings, self._apply_settings)
+
+    def _apply_settings(self, settings: ReminderSettings) -> None:
+        self._settings_store.save(settings)
+        previous_interval = self._settings.interval_minutes
+        self._settings = settings
+        self._notifier.configure(settings)
+        if settings.interval_minutes != previous_interval:
+            self._timer.set_interval(timedelta(minutes=settings.interval_minutes))
 
     def _quit(self, icon: object = None, item: object = None) -> None:
         self._timer.shutdown()
@@ -433,7 +471,11 @@ def run_windows_app() -> int:
         if not instance.acquire():
             logger.info("Another Productivity Timer instance is already running")
             return 0
-        WindowsTrayApp(TriggerStateStore(state_dir / "state.json")).run()
+        WindowsTrayApp(
+            TriggerStateStore(state_dir / "state.json"),
+            SettingsStore(state_dir / "settings.json"),
+            icon_path,
+        ).run()
     return 0
 
 
@@ -491,3 +533,24 @@ def _format_moment(
     if local.date() == local_reference.date():
         return f"today at {local:%H:%M:%S}"
     return f"{local:%Y-%m-%d %H:%M:%S}"
+
+
+def _toast_audio(settings: ReminderSettings) -> Any:
+    from windows_toasts import AudioSource, ToastAudio
+
+    if settings.sound is NotificationSound.SILENT:
+        return ToastAudio(silent=True)
+    if settings.sound is NotificationSound.CUSTOM:
+        if settings.custom_sound is not None and settings.custom_sound.is_file():
+            return ToastAudio(settings.custom_sound)
+        logger.warning("Custom notification sound is missing; using Windows default")
+        return ToastAudio(AudioSource.Default)
+
+    sources = {
+        NotificationSound.DEFAULT: AudioSource.Default,
+        NotificationSound.REMINDER: AudioSource.Reminder,
+        NotificationSound.MAIL: AudioSource.Mail,
+        NotificationSound.INSTANT_MESSAGE: AudioSource.IM,
+        NotificationSound.TEXT_MESSAGE: AudioSource.SMS,
+    }
+    return ToastAudio(sources[settings.sound])

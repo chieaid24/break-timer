@@ -82,6 +82,24 @@ class ReminderTimer:
             self._condition.notify_all()
         self._emit(snapshot)
 
+    def set_interval(self, interval: timedelta) -> None:
+        """Set the interval and restart the countdown when running."""
+        if interval <= timedelta(0):
+            raise ValueError("interval must be positive")
+
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("timer is shut down")
+            if interval == self._interval:
+                return
+            self._interval = interval
+            self._interval_seconds = interval.total_seconds()
+            if self._running:
+                self._schedule_locked()
+            snapshot = self._snapshot_locked()
+            self._condition.notify_all()
+        self._emit(snapshot)
+
     def shutdown(self) -> None:
         """Stop the worker permanently. This operation is idempotent."""
         with self._condition:

@@ -84,6 +84,34 @@ class ReminderTimerTests(unittest.TestCase):
 
         self.assertEqual(timer.snapshot.last_triggered, previous)
 
+    def test_interval_change_restarts_running_countdown(self) -> None:
+        timer = ReminderTimer(timedelta(seconds=1), lambda: None)
+        self.addCleanup(timer.shutdown)
+        timer.start()
+        original_next = timer.snapshot.next_trigger
+
+        changed_at = datetime.now(UTC)
+        timer.set_interval(timedelta(seconds=3))
+        updated = timer.snapshot
+
+        self.assertTrue(updated.running)
+        self.assertGreater(updated.next_trigger, original_next)
+        self.assertGreaterEqual(
+            updated.next_trigger,
+            changed_at + timedelta(seconds=2.9),
+        )
+
+    def test_interval_change_does_not_resume_paused_timer(self) -> None:
+        timer = ReminderTimer(timedelta(seconds=1), lambda: None)
+        self.addCleanup(timer.shutdown)
+        timer.start()
+        timer.pause()
+
+        timer.set_interval(timedelta(seconds=3))
+
+        self.assertFalse(timer.snapshot.running)
+        self.assertIsNone(timer.snapshot.next_trigger)
+
     def test_shutdown_is_idempotent_and_prevents_restart(self) -> None:
         timer = ReminderTimer(timedelta(seconds=1), lambda: None)
         timer.shutdown()
