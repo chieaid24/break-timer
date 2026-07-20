@@ -1,6 +1,6 @@
 # Productivity Timer
 
-Productivity Timer is a configurable break reminder for Windows 10 and Windows 11. It runs in the system tray and starts automatically at sign-in.
+Productivity Timer is a configurable break reminder for Windows 10 and Windows 11. It runs in the system tray and starts automatically at sign-in. I use it to remind myself to look away from the screen or take a short walking break.
 
 This app does not support macOS or Linux.
 
