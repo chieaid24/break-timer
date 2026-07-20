@@ -323,31 +323,31 @@ def create_status_icon(is_running: bool, size: int = 64) -> Any:
         fill=charcoal,
     )
 
-    cigarette_start = point(30, 195)
-    cigarette_end = point(115, 154)
+    cigarette_start = point(8, 213)
+    cigarette_end = point(126, 155)
     draw.line(
         (cigarette_start, cigarette_end),
         fill=charcoal,
-        width=width(24),
+        width=width(38),
     )
     draw.line(
         (cigarette_start, cigarette_end),
         fill=cream,
-        width=width(12),
+        width=width(22),
     )
-    draw.ellipse(box(22, 184, 39, 205), fill=charcoal)
-    draw.ellipse(box(26, 188, 35, 201), fill=ember)
+    draw.ellipse(box(-7, 195, 24, 228), fill=charcoal)
+    draw.ellipse(box(-1, 201, 19, 223), fill=ember)
     draw.line(
         [
-            point(27, 181),
-            point(37, 170),
-            point(29, 158),
-            point(33, 146),
-            point(45, 134),
-            point(41, 121),
+            point(8, 192),
+            point(24, 177),
+            point(13, 161),
+            point(20, 145),
+            point(35, 130),
+            point(29, 112),
         ],
         fill=sage,
-        width=width(9),
+        width=width(12),
         joint="curve",
     )
 
