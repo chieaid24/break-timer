@@ -1,8 +1,8 @@
 # Productivity Timer
 
-Productivity Timer is a fixed 20-minute reminder for Windows 10 and Windows 11. It runs in the system tray and starts automatically at sign-in.
+Productivity Timer is a configurable break reminder for Windows 10 and Windows 11. It runs in the system tray and starts automatically at sign-in.
 
-This app does not support macOS or Linux, and it has no interval or message settings.
+This app does not support macOS or Linux.
 
 ## Install
 
@@ -17,9 +17,11 @@ After the installer works, delete your old downloaded `ProductivityTimer.exe` or
 
 ## Use
 
+Right-click the tray icon and choose **Settings...** to change the break interval, notification message, and sound. Choose a built-in Windows sound, silent mode, or a custom WAV file. Saving a changed interval restarts the current countdown.
+
 Hover over the tray icon to see the last successful reminder and the next scheduled reminder. Click the icon to pause or resume reminders. Pausing lasts until you resume or restart the app; quitting lasts until your next Windows sign-in.
 
-Logs and the last successful trigger are stored in `%LOCALAPPDATA%\ProductivityTimer`.
+Logs, settings, and the last successful trigger are stored in `%LOCALAPPDATA%\ProductivityTimer`.
 
 To remove the app, open **Settings > Apps > Installed apps**, find **Productivity Timer**, and click **Uninstall**.
 

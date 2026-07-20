@@ -36,6 +36,17 @@ class StatusIconTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "size must be positive"):
             create_status_icon(True, 0)
 
+    def test_cigarette_ember_remains_visible_at_tray_size(self) -> None:
+        icon = create_status_icon(True, 32)
+
+        ember_pixels = sum(
+            1
+            for red, green, blue, alpha in icon.get_flattened_data()
+            if red > 130 and green < 130 and blue < 100 and alpha > 150
+        )
+
+        self.assertGreaterEqual(ember_pixels, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

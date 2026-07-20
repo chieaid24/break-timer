@@ -5,12 +5,17 @@ import sys
 import tempfile
 import unittest
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from types import ModuleType
 from unittest import mock
 
+from productivity_timer.settings import (
+    NotificationSound,
+    ReminderSettings,
+    SettingsStore,
+)
 from productivity_timer.timer import TimerSnapshot
 from productivity_timer.windows import (
     RUN_KEY,
@@ -19,6 +24,7 @@ from productivity_timer.windows import (
     StartupRegistration,
     ToastNotifier,
     TriggerStateStore,
+    WindowsTrayApp,
     format_tooltip,
     run_windows_app,
     startup_command,
@@ -33,6 +39,26 @@ class NotificationSetting(Enum):
 class FakeToast:
     def __init__(self) -> None:
         self.text_fields: list[str] = []
+        self.audio: FakeToastAudio | None = None
+
+
+class FakeAudioSource(Enum):
+    Default = "Default"
+    Reminder = "Reminder"
+    Mail = "Mail"
+    IM = "IM"
+    SMS = "SMS"
+
+
+class FakeToastAudio:
+    def __init__(
+        self,
+        sound: FakeAudioSource | Path = FakeAudioSource.Default,
+        *,
+        silent: bool = False,
+    ) -> None:
+        self.sound = sound
+        self.silent = silent
 
 
 class FakeNativeNotifier:
@@ -153,6 +179,56 @@ class WindowsFormattingTests(unittest.TestCase):
         self.assertEqual(
             toaster.shown[0].text_fields, ["Water, breathe, flat, posture"]
         )
+        self.assertEqual(toaster.shown[0].audio.sound, FakeAudioSource.Default)
+
+    def test_toast_uses_configured_message_and_builtin_sound(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
+        settings = ReminderSettings(
+            interval_minutes=45,
+            message="Stand up and stretch",
+            sound=NotificationSound.REMINDER,
+        )
+        with mock.patch.dict(sys.modules, {"windows_toasts": fake_module}):
+            ToastNotifier(settings).notify()
+
+        self.assertEqual(toaster.shown[0].text_fields, ["Stand up and stretch"])
+        self.assertEqual(toaster.shown[0].audio.sound, FakeAudioSource.Reminder)
+
+    def test_toast_can_be_silent(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
+        settings = ReminderSettings(sound=NotificationSound.SILENT)
+        with mock.patch.dict(sys.modules, {"windows_toasts": fake_module}):
+            ToastNotifier(settings).notify()
+
+        self.assertTrue(toaster.shown[0].audio.silent)
+
+    def test_missing_custom_sound_falls_back_to_default(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
+        settings = ReminderSettings(
+            sound=NotificationSound.CUSTOM,
+            custom_sound=Path("missing.wav"),
+        )
+        with (
+            mock.patch.dict(sys.modules, {"windows_toasts": fake_module}),
+            self.assertLogs("productivity_timer.windows", level="WARNING"),
+        ):
+            ToastNotifier(settings).notify()
+
+        self.assertEqual(toaster.shown[0].audio.sound, FakeAudioSource.Default)
+
+    def test_toast_uses_existing_custom_sound(self) -> None:
+        fake_module, toaster = self._fake_toasts(NotificationSetting.ENABLED)
+        with tempfile.TemporaryDirectory() as directory:
+            sound = Path(directory) / "tone.wav"
+            sound.write_bytes(b"RIFF")
+            settings = ReminderSettings(
+                sound=NotificationSound.CUSTOM,
+                custom_sound=sound,
+            )
+            with mock.patch.dict(sys.modules, {"windows_toasts": fake_module}):
+                ToastNotifier(settings).notify()
+
+        self.assertEqual(toaster.shown[0].audio.sound, sound)
 
     @unittest.skipIf(os.name == "nt", "non-Windows contract")
     def test_runtime_rejects_non_windows(self) -> None:
@@ -165,9 +241,89 @@ class WindowsFormattingTests(unittest.TestCase):
     ) -> tuple[ModuleType, FakeToaster]:
         toaster = FakeToaster(setting)
         module = ModuleType("windows_toasts")
+        module.AudioSource = FakeAudioSource
         module.Toast = FakeToast
+        module.ToastAudio = FakeToastAudio
         module.WindowsToaster = lambda application_name: toaster
         return module, toaster
+
+
+class WindowsTrayAppTests(unittest.TestCase):
+    def test_tray_menu_exposes_settings(self) -> None:
+        class FakeIcon:
+            def __init__(self, name: str) -> None:
+                self.name = name
+                self.icon: object = None
+                self.menu: object = None
+                self.title = ""
+                self.visible = False
+
+        class FakeMenuItem:
+            def __init__(
+                self,
+                text: object,
+                action: object,
+                *,
+                default: bool = False,
+            ) -> None:
+                self.text = text
+                self.action = action
+                self.default = default
+
+        class FakeMenu:
+            SEPARATOR = object()
+
+            def __init__(self, *items: object) -> None:
+                self.items = items
+
+        pystray = ModuleType("pystray")
+        pystray.Icon = FakeIcon
+        pystray.Menu = FakeMenu
+        pystray.MenuItem = FakeMenuItem
+        toasts, unused_toaster = WindowsFormattingTests._fake_toasts(
+            NotificationSetting.ENABLED
+        )
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.dict(
+                sys.modules,
+                {"pystray": pystray, "windows_toasts": toasts},
+            ),
+        ):
+            state_dir = Path(directory)
+            app = WindowsTrayApp(
+                TriggerStateStore(state_dir / "state.json"),
+                SettingsStore(state_dir / "settings.json"),
+            )
+            self.addCleanup(app._timer.shutdown)
+
+        self.assertEqual(app._icon.menu.items[1].text, "Settings...")
+
+    def test_apply_settings_persists_and_restarts_changed_interval(self) -> None:
+        app = WindowsTrayApp.__new__(WindowsTrayApp)
+        app._settings = ReminderSettings()
+        app._settings_store = mock.Mock()
+        app._notifier = mock.Mock()
+        app._timer = mock.Mock()
+        settings = ReminderSettings(interval_minutes=45)
+
+        app._apply_settings(settings)
+
+        app._settings_store.save.assert_called_once_with(settings)
+        app._notifier.configure.assert_called_once_with(settings)
+        app._timer.set_interval.assert_called_once_with(timedelta(minutes=45))
+
+    def test_apply_settings_keeps_countdown_when_interval_is_unchanged(self) -> None:
+        app = WindowsTrayApp.__new__(WindowsTrayApp)
+        app._settings = ReminderSettings()
+        app._settings_store = mock.Mock()
+        app._notifier = mock.Mock()
+        app._timer = mock.Mock()
+        settings = ReminderSettings(message="Take a break")
+
+        app._apply_settings(settings)
+
+        app._timer.set_interval.assert_not_called()
 
 
 @unittest.skipUnless(os.name == "nt", "Windows integration test")
