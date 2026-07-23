@@ -1,11 +1,8 @@
 # Productivity Timer
 
-Productivity Timer is a configurable break reminder. It stays out of your way —
-on Windows it lives in the system tray, on macOS in the menu bar — and reminds
-you to look away from the screen or take a short walking break.
+Productivity Timer is a configurable break reminder. I use it to remind myself to look away from the screen or take a short break.
 
-Both platforms are built from the same scheduling and settings core and start
-automatically when you sign in.
+Works cross platform on Windows and Mac.
 
 ## Pick your platform
 
@@ -20,8 +17,6 @@ automatically when you sign in.
 | Starts at sign-in via | `HKCU\...\Run` registry key | `launchd` user agent |
 | Settings and logs | `%LOCALAPPDATA%\ProductivityTimer` | `~/Library/Application Support/ProductivityTimer` |
 | Runtime | Bundled, no Python needed | Python 3.11+ in a local `.venv` |
-
-Linux is not supported.
 
 ## Layout
 
