@@ -60,8 +60,10 @@ class TriggerStateStoreTests(unittest.TestCase):
 @unittest.skipUnless(sys.platform == "darwin", "macOS module")
 class LaunchAgentRegistrationTests(unittest.TestCase):
     def _registration(
-        self, directory: str, label: str = LAUNCH_AGENT_LABEL
+        self, directory: str, label: str | None = None
     ) -> LaunchAgentRegistration:
+        # Default resolved at call time; module constant only exists on macOS.
+        label = label if label is not None else LAUNCH_AGENT_LABEL
         root = Path(directory)
         return LaunchAgentRegistration(
             ["/opt/venv/bin/python", "-m", "productivity_timer"],
