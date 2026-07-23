@@ -1,37 +1,60 @@
 # Productivity Timer
 
-Productivity Timer is a configurable break reminder for Windows 10 and Windows 11. It runs in the system tray and starts automatically at sign-in. I use it to remind myself to look away from the screen or take a short walking break.
+Productivity Timer is a configurable break reminder. It stays out of your way —
+on Windows it lives in the system tray, on macOS in the menu bar — and reminds
+you to look away from the screen or take a short walking break.
 
-This app does not support macOS or Linux.
+Both platforms are built from the same scheduling and settings core and start
+automatically when you sign in.
 
-## Install
+## Pick your platform
 
-1. Open the [latest release](https://github.com/chieaid24/break-timer-app/releases/latest). Sign in to GitHub if asked.
-2. Download `ProductivityTimer-Setup.exe`.
-3. Open the downloaded file. If Windows SmartScreen appears, click **More info**, confirm the filename, then click **Run anyway**. Do not turn off SmartScreen.
-4. Complete the installer. Productivity Timer starts immediately and will start at every Windows sign-in.
+| | Windows 10 / 11 | macOS 13+ |
+| --- | --- | --- |
+| **Setup guide** | [docs/WINDOWS.md](docs/WINDOWS.md) | [docs/MACOS.md](docs/MACOS.md) |
+| Where it lives | System tray | Menu bar (`⏱`), no Dock icon |
+| Install with | `ProductivityTimer-Setup.exe` | `./scripts/install-macos.sh` |
+| Change settings | **Settings...** in the tray menu | Edit `settings.json` |
+| Notifications | Windows toast | Notification Center |
+| Sounds | Windows sounds, silent, or custom WAV | Random macOS system sound, silent, or custom |
+| Starts at sign-in via | `HKCU\...\Run` registry key | `launchd` user agent |
+| Settings and logs | `%LOCALAPPDATA%\ProductivityTimer` | `~/Library/Application Support/ProductivityTimer` |
+| Runtime | Bundled, no Python needed | Python 3.11+ in a local `.venv` |
 
-The first unsigned release may show a SmartScreen warning. A managed work or school computer can block the override; in that case, ask its administrator.
+Linux is not supported.
 
-After the installer works, delete your old downloaded `ProductivityTimer.exe` or old project folder. The installer replaces the previous startup entry. If an old tray icon is still visible, right-click it and choose **Quit until next sign-in** first.
+## Layout
 
-## Use
+```
+productivity_timer/
+  timer.py            scheduling, shared by both platforms
+  settings.py         settings validation and persistence, shared
+  __main__.py         picks the platform at launch
+  windows.py          tray icon, toasts, registry startup   (Windows only)
+  settings_dialog.py  the native settings window            (Windows only)
+  macos.py            menu bar item, Notification Center, launch agent (macOS only)
+scripts/
+  build.ps1           test and package the Windows build
+  install-inno.ps1    install the Windows installer toolchain
+  install-macos.sh    install and start the macOS build
+  uninstall-macos.sh  stop and remove the macOS build
+installer/            Windows installer definition
+docs/                 per-platform setup guides and release notes
+```
 
-Right-click the tray icon and choose **Settings...** to change the break interval, notification message, and sound. Choose a built-in Windows sound, silent mode, or a custom WAV file. Saving a changed interval restarts the current countdown.
+## Verify
 
-Hover over the tray icon to see the last successful reminder and the next scheduled reminder. Click the icon to pause or resume reminders. Pausing lasts until you resume or restart the app; quitting lasts until your next Windows sign-in.
-
-Logs, settings, and the last successful trigger are stored in `%LOCALAPPDATA%\ProductivityTimer`.
-
-To remove the app, open **Settings > Apps > Installed apps**, find **Productivity Timer**, and click **Uninstall**.
-
-## Build
-
-Use Windows and Python 3.12. Run these commands from PowerShell:
+On Windows, from PowerShell:
 
 ```powershell
 .\scripts\install-inno.ps1
 .\scripts\build.ps1
 ```
 
-The script creates `dist\ProductivityTimer.exe` and `dist\installer\ProductivityTimer-Setup.exe`. A pushed version tag such as `v1.0.0` runs the same checks and publishes both files to GitHub Releases.
+On macOS:
+
+```bash
+.venv/bin/python -m pytest tests/test_macos.py tests/test_timer.py tests/test_settings.py
+```
+
+`tests/test_windows.py` needs Windows and runs in GitHub Actions.
